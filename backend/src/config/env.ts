@@ -25,6 +25,8 @@ export const env = {
   ruppiChangePasswordPath: requireEnv('RUPPI_CHANGE_PASSWORD_PATH'),
   ruppiAuthResendCodePath: requireEnv('RUPPI_AUTH_RESEND_CODE_PATH'),
   ruppiAuthVerifyStudentPath: requireEnv('RUPPI_AUTH_VERIFY_STUDENT_PATH'),
+  ruppiGetProfilePath: requireEnv('RUPPI_GET_PROFILE_PATH'),
+  ruppiUpdateProfilePath: requireEnv('RUPPI_UPDATE_PROFILE_PATH'),
   // Optional — set to your DLT-registered OTP template ID once obtained from RUPPI admin.
   // Without this, OTP SMS may be silently blocked by Indian telecom carriers (DLT requirement).
   ruppiOtpDltTeId: process.env['RUPPI_OTP_DLT_TE_ID']?.trim() || null,

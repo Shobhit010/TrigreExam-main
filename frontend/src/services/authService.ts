@@ -6,9 +6,14 @@ export interface User {
   id: string;
   student_id: string;
   email: string;
-  name: string;         // Maps from RUPPI "firstname"
+  firstname: string;
+  lastname: string;
+  name: string;         // Maps from RUPPI "firstname" + "lastname"
   mobile: string;
   profile_pic: string | null;
+  class?: string;
+  segment?: string;
+  address?: string;
 }
 
 // ---- localStorage keys -------------------------------------------------
@@ -18,12 +23,12 @@ const USER_KEY = 'trigreexam_auth_user';
 // ---- Axios instance ----------------------------------------------------
 // VITE_API_BASE_URL is defined in frontend/.env
 // Vite exposes only VITE_* variables to the browser bundle.
+// NOTE: Do NOT set a default Content-Type header — Axios 1.x auto-detects
+// it from the request body (application/json for objects, multipart/form-data
+// for FormData). A hard-coded default can override FormData auto-detection.
 const apiClient: AxiosInstance = axios.create({
   baseURL: (import.meta.env['VITE_API_BASE_URL'] as string | undefined) ?? '',
   timeout: 15000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
 
 // Attach JWT to every outgoing request
@@ -43,6 +48,7 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
+      console.error(`401 Unauthorized for URL: ${error.config?.url}`);
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
     }
@@ -74,6 +80,12 @@ interface RegisterApiResponse {
 interface SimpleApiResponse {
   success: boolean;
   message: string;
+}
+
+interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
 }
 
 // ---- authService -------------------------------------------------------
@@ -164,6 +176,28 @@ export const authService = {
   // Checks for the token key — both token AND user must exist for a valid session
   isAuthenticated: (): boolean => {
     return !!localStorage.getItem(TOKEN_KEY);
+  },
+
+  getProfile: async (): Promise<User> => {
+    const response = await apiClient.get<ApiResponse<User>>('/api/auth/profile');
+    const user = response.data.data;
+
+    // Update localStorage with fresh data
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+
+    return user;
+  },
+
+  updateProfile: async (data: Partial<User>): Promise<void> => {
+    await apiClient.post('/api/auth/update-profile', data);
+    await authService.getProfile();
+  },
+
+  // Sends profile update as multipart/form-data (required when a profile_pic file is included).
+  // Axios 1.x automatically detects browser FormData and sets the correct
+  // 'multipart/form-data; boundary=...' Content-Type — no manual override needed.
+  updateProfileFormData: async (formData: FormData): Promise<void> => {
+    await apiClient.post('/api/auth/update-profile', formData);
   },
 
   // Exposed for other services that need authenticated API access

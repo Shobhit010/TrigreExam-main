@@ -9,6 +9,8 @@ import {
   resendVerificationCode,
   verifyStudentOtp,
   changePassword,
+  getProfileWithRuppi,
+  updateProfileWithRuppi,
 } from './auth.service';
 import { sendSuccess, sendError } from '../../utils/responseHandler';
 import { asyncWrapper } from '../../utils/errorHandler';
@@ -174,3 +176,42 @@ export const changePasswordController = asyncWrapper(
     sendSuccess(res, null, 'Password changed successfully', 200);
   }
 );
+
+// PROFILE — Get Profile
+export const getProfileController = asyncWrapper(
+  async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
+    const { student_id } = (req as import('../../middlewares/auth.middleware').AuthRequest).user;
+    const user = await getProfileWithRuppi(student_id);
+    sendSuccess(res, user, 'Profile fetched successfully', 200);
+  }
+);
+
+// PROFILE — Update Profile
+export const updateProfileController = asyncWrapper(
+  async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
+    const { student_id } = (req as import('../../middlewares/auth.middleware').AuthRequest).user;
+    const updateData = req.body as {
+      firstname?: string;
+      lastname?: string;
+      mobile?: string;
+      email?: string;
+      class?: string;
+      segment?: string;
+      address?: string;
+    };
+
+    console.log('[AuthController] Update Profile request for:', student_id);
+    console.log('[AuthController] Body keys:', Object.keys(req.body));
+    console.log('[AuthController] File:', (req as any).file ? (req as any).file.originalname : 'None');
+
+    // Extract uploaded profile picture file (if any) — multer puts it on req.file
+    const file = (req as Request & { file?: Express.Multer.File }).file;
+    const profilePicFile = file
+      ? { buffer: file.buffer, mimetype: file.mimetype, originalname: file.originalname }
+      : undefined;
+
+    await updateProfileWithRuppi(student_id, updateData, profilePicFile);
+    sendSuccess(res, null, 'Profile updated successfully', 200);
+  }
+);
+

@@ -5,7 +5,11 @@ export interface IUser extends Document {
   email: string;
   mobile: string;
   firstname: string;
+  lastname: string;
   profile_pic: string | null;
+  class?: string;
+  segment?: string;
+  address?: string;
   ruppi_token_encrypted: string;
   last_login: Date;
   created_at: Date;
@@ -37,9 +41,26 @@ const userSchema = new mongoose.Schema<IUser>(
       required: true,
       trim: true,
     },
+    lastname: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     profile_pic: {
       type: String,
       default: null,
+    },
+    class: {
+      type: String,
+      trim: true,
+    },
+    segment: {
+      type: String,
+      trim: true,
+    },
+    address: {
+      type: String,
+      trim: true,
     },
     // CRITICAL: select: false — this field is excluded from ALL Mongoose queries by default.
     // Must explicitly use .select('+ruppi_token_encrypted') to read it.

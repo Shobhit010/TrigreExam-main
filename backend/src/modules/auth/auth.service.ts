@@ -59,6 +59,7 @@ interface RuppiLoginResponse {
   status_code: number;
   data: {
     firstname: string;
+    lastname?: string;
     mobile: string;
     email: string;
     student_id: string;
@@ -75,8 +76,12 @@ export interface JwtPayload {
   student_id: string;
   email: string;
   firstname: string;
+  lastname: string;
   mobile: string;
   profile_pic: string | null;
+  class?: string;
+  segment?: string;
+  address?: string;
   iat?: number;
   exp?: number;
 }
@@ -86,9 +91,14 @@ export interface AuthenticatedUser {
   id: string;
   student_id: string;
   email: string;
+  firstname: string;
+  lastname: string;
   name: string;
   mobile: string;
   profile_pic: string | null;
+  class?: string;
+  segment?: string;
+  address?: string;
 }
 
 export interface LoginResult {
@@ -147,20 +157,46 @@ export async function loginWithRuppi(
   // Step 3: Encrypt RUPPI token before storing — never persisted in plaintext
   const encryptedRuppiToken = encryptToken(ruppiToken);
 
-  // Step 4: Upsert user in MongoDB (create on first login, update on subsequent)
+  // Step 4: Sync user in MongoDB
   const now = new Date();
+  const existingUser = await UserModel.findOne({ student_id: ruppiUser.student_id });
+
+  // Fields RUPPI always owns (identity/auth fields) — these always sync
+  const updatePayload: Record<string, any> = {
+    email: ruppiUser.email ?? '',
+    mobile: ruppiUser.mobile,
+    ruppi_token_encrypted: encryptedRuppiToken,
+    last_login: now,
+  };
+
+  // If this is a new user OR the local field is missing, sync from RUPPI.
+  // We prefer local values for name/pic/segment after the initial creation
+  // to support the 'local-first' strategy the user requested.
+  if (!existingUser) {
+    updatePayload.firstname = ruppiUser.firstname;
+    updatePayload.lastname = ruppiUser.lastname ?? '';
+    updatePayload.profile_pic = ruppiUser.profile_pic;
+    if ((ruppiUser as any).class) updatePayload.class = (ruppiUser as any).class;
+    if ((ruppiUser as any).segment) updatePayload.segment = (ruppiUser as any).segment;
+    if ((ruppiUser as any).address) updatePayload.address = (ruppiUser as any).address;
+  } else {
+    // For existing users, only sync if local field is empty
+    if (!existingUser.firstname) updatePayload.firstname = ruppiUser.firstname;
+    if (!existingUser.lastname) updatePayload.lastname = ruppiUser.lastname ?? '';
+
+    // For profile_pic, only sync from RUPPI if we don't have a local Base64 image
+    if (!existingUser.profile_pic || !existingUser.profile_pic.startsWith('data:')) {
+      if (ruppiUser.profile_pic) updatePayload.profile_pic = ruppiUser.profile_pic;
+    }
+
+    if (!existingUser.class && (ruppiUser as any).class) updatePayload.class = (ruppiUser as any).class;
+    if (!existingUser.segment && (ruppiUser as any).segment) updatePayload.segment = (ruppiUser as any).segment;
+    if (!existingUser.address && (ruppiUser as any).address) updatePayload.address = (ruppiUser as any).address;
+  }
+
   const user = await UserModel.findOneAndUpdate(
     { student_id: ruppiUser.student_id },
-    {
-      $set: {
-        email: ruppiUser.email ?? '',
-        mobile: ruppiUser.mobile,
-        firstname: ruppiUser.firstname,
-        profile_pic: ruppiUser.profile_pic ?? null,
-        ruppi_token_encrypted: encryptedRuppiToken,
-        last_login: now,
-      },
-    },
+    { $set: updatePayload },
     {
       upsert: true,
       new: true,
@@ -175,8 +211,12 @@ export async function loginWithRuppi(
     student_id: user.student_id,
     email: user.email,
     firstname: user.firstname,
+    lastname: user.lastname,
     mobile: user.mobile,
     profile_pic: user.profile_pic,
+    class: user.class,
+    segment: user.segment,
+    address: user.address,
   };
 
   const token = jwt.sign(jwtPayload, env.jwtSecret, {
@@ -190,9 +230,14 @@ export async function loginWithRuppi(
     id: jwtPayload.sub,
     student_id: user.student_id,
     email: user.email,
-    name: user.firstname,
+    firstname: user.firstname,
+    lastname: user.lastname,
+    name: `${user.firstname} ${user.lastname}`.trim(),
     mobile: user.mobile,
     profile_pic: user.profile_pic,
+    class: user.class,
+    segment: user.segment,
+    address: user.address,
   };
 
   return { token, user: authenticatedUser };
@@ -216,8 +261,8 @@ export async function getRuppiToken(studentId: string): Promise<string> {
     .select('+ruppi_token_encrypted')
     .lean() as (IUser & { ruppi_token_encrypted: string }) | null;
 
-  if (!user) {
-    throw new AppError('User not found', 404);
+  if (!user || !user.ruppi_token_encrypted) {
+    throw new AppError('RUPPI session token not found. Please log in again.', 401);
   }
 
   return decryptToken(user.ruppi_token_encrypted);
@@ -645,3 +690,264 @@ export async function changePassword(
     throw new AppError(ruppiData.msg ?? 'Password change failed', 400);
   }
 }
+
+// ============================================================
+// PROFILE — Get Profile
+// ============================================================
+
+interface RuppiGetProfileResponse {
+  status: boolean;
+  status_code: number;
+  data: {
+    firstname: string;
+    lastname?: string;
+    mobile: string;
+    email: string;
+    student_id: string;
+    profile_pic: string | null;
+  };
+  msg: string;
+}
+
+export async function getProfileWithRuppi(studentId: string): Promise<AuthenticatedUser> {
+  const ruppiToken = await getRuppiToken(studentId);
+
+  console.log('[AuthService] RUPPI Get Profile → GET', ruppiConfig.getProfileUrl);
+
+  // Helper: return the locally-cached MongoDB user document as AuthenticatedUser
+  async function getLocalUser(): Promise<AuthenticatedUser> {
+    const localUser = await UserModel.findOne({ student_id: studentId });
+    if (!localUser) throw new AppError('User record not found', 404);
+    return {
+      id: localUser._id.toString(),
+      student_id: localUser.student_id,
+      email: localUser.email,
+      firstname: localUser.firstname,
+      lastname: localUser.lastname,
+      name: `${localUser.firstname} ${localUser.lastname}`.trim(),
+      mobile: localUser.mobile,
+      profile_pic: localUser.profile_pic,
+      class: localUser.class,
+      segment: localUser.segment,
+      address: localUser.address,
+    };
+  }
+
+  let ruppiResponse: RuppiGetProfileResponse;
+  try {
+    const { data } = await ruppiClient.get<RuppiGetProfileResponse>(
+      ruppiConfig.getProfileUrl,
+      { headers: { Authorization: `Bearer ${ruppiToken}` } }
+    );
+    ruppiResponse = data;
+    console.log('[AuthService] RUPPI Get Profile success for:', studentId);
+  } catch (error: unknown) {
+    const axiosErr = error as { response?: { status: number } };
+    if (axiosErr.response?.status === 401) {
+      // RUPPI session token has expired — fall back to last-known MongoDB data
+      console.warn('[AuthService] RUPPI token expired for', studentId, '— serving local cache');
+      return getLocalUser();
+    }
+    console.error('[AuthService] RUPPI Get Profile network error:', error);
+    // On any other network error, also fall back to local cache rather than returning 503
+    console.warn('[AuthService] RUPPI unreachable — serving local cache for', studentId);
+    return getLocalUser();
+  }
+
+  if (!ruppiResponse.status || !ruppiResponse.data) {
+    console.warn('[AuthService] RUPPI returned status:false — serving local cache');
+    return getLocalUser();
+  }
+
+  const { data: ruppiUser } = ruppiResponse;
+  const existingUser = await UserModel.findOne({ student_id: studentId });
+
+  // Sync fresh RUPPI data into MongoDB — but preserve locally-updated fields.
+  const updateFields: Record<string, unknown> = {
+    email: ruppiUser.email ?? '',
+    mobile: ruppiUser.mobile,
+  };
+
+  // Only sync profile fields if they are missing locally or if we're not using a local-first override
+  if (existingUser) {
+    if (!existingUser.firstname) updateFields.firstname = ruppiUser.firstname;
+    if (!existingUser.lastname) updateFields.lastname = ruppiUser.lastname ?? '';
+
+    // For profile_pic, only sync from RUPPI if we don't have a local Base64 image
+    if (!existingUser.profile_pic || !existingUser.profile_pic.startsWith('data:')) {
+      if (ruppiUser.profile_pic) updateFields.profile_pic = ruppiUser.profile_pic;
+    }
+
+    if (!existingUser.class) updateFields.class = (ruppiUser as any).class ?? '';
+    if (!existingUser.segment) updateFields.segment = (ruppiUser as any).segment ?? '';
+    if (!existingUser.address) updateFields.address = (ruppiUser as any).address ?? '';
+  } else {
+    // New user scenario
+    updateFields.firstname = ruppiUser.firstname;
+    updateFields.lastname = ruppiUser.lastname ?? '';
+    updateFields.profile_pic = ruppiUser.profile_pic;
+    updateFields.class = (ruppiUser as any).class ?? '';
+    updateFields.segment = (ruppiUser as any).segment ?? '';
+    updateFields.address = (ruppiUser as any).address ?? '';
+  }
+
+  const user = await UserModel.findOneAndUpdate(
+    { student_id: studentId },
+    { $set: updateFields },
+    { new: true, upsert: true }
+  );
+
+  if (!user) throw new AppError('User record not found', 404);
+
+  return {
+    id: user._id.toString(),
+    student_id: user.student_id,
+    email: user.email,
+    firstname: user.firstname,
+    lastname: user.lastname,
+    name: `${user.firstname} ${user.lastname}`.trim(),
+    mobile: user.mobile,
+    profile_pic: user.profile_pic,
+    class: user.class,
+    segment: user.segment,
+    address: user.address,
+  };
+}
+
+// ============================================================
+// PROFILE — Update Profile
+// ============================================================
+
+interface RuppiUpdateProfileResponse {
+  status: boolean;
+  msg: string;
+  status_code?: number;
+}
+
+export async function updateProfileWithRuppi(
+  studentId: string,
+  updateData: {
+    firstname?: string;
+    lastname?: string;
+    mobile?: string;
+    email?: string;
+    profile_pic?: string;
+    class?: string;
+    segment?: string;
+    address?: string;
+  },
+  profilePicFile?: { buffer: Buffer; mimetype: string; originalname: string }
+): Promise<void> {
+  const ruppiToken = await getRuppiToken(studentId);
+
+  // Build the MongoDB update payload first — used whether RUPPI succeeds or not
+  const mongodbUpdate: Record<string, string> = {};
+  if (updateData.firstname !== undefined) mongodbUpdate['firstname'] = updateData.firstname;
+  if (updateData.lastname !== undefined) mongodbUpdate['lastname'] = updateData.lastname;
+  if (updateData.email !== undefined) mongodbUpdate['email'] = updateData.email;
+  if (updateData.mobile !== undefined) mongodbUpdate['mobile'] = updateData.mobile;
+  if (updateData.class !== undefined) mongodbUpdate['class'] = updateData.class;
+  if (updateData.segment !== undefined) mongodbUpdate['segment'] = updateData.segment;
+  if (updateData.address !== undefined) mongodbUpdate['address'] = updateData.address;
+
+  console.log('[AuthService] updateProfileWithRuppi - studentId:', studentId);
+  console.log('[AuthService] updateData keys:', Object.keys(updateData));
+  console.log('[AuthService] mongodbUpdate keys:', Object.keys(mongodbUpdate));
+
+  // If an actual file was uploaded, convert it to a Base64 data URL for local storage.
+  // This ensures the profile picture is always persisted, even when the RUPPI session
+  // token has expired and we can't reach the RUPPI CDN.
+  if (profilePicFile) {
+    const base64 = profilePicFile.buffer.toString('base64');
+    const dataUrl = `data:${profilePicFile.mimetype};base64,${base64}`;
+    mongodbUpdate['profile_pic'] = dataUrl;
+    console.log('[AuthService] Profile pic converted to base64 data URL, size:', base64.length, 'chars');
+  }
+
+  async function saveLocally(): Promise<void> {
+    try {
+      if (Object.keys(mongodbUpdate).length > 0) {
+        const result = await UserModel.updateOne({ student_id: studentId }, { $set: mongodbUpdate });
+        console.log('[AuthService] Profile save to local MongoDB result:', JSON.stringify(result), 'for student_id:', studentId);
+        if (result.matchedCount === 0) {
+          console.error('[AuthService] CRITICAL: No user matched for student_id:', studentId);
+        }
+      } else {
+        console.log('[AuthService] No local fields to update for:', studentId);
+      }
+    } catch (err) {
+      console.error('[AuthService] Failed to save locally to MongoDB:', err);
+    }
+  }
+
+  // CRITICAL: Save locally FIRST. The local DB is the source of truth for our app.
+  await saveLocally();
+
+  const form = new FormData();
+  if (updateData.firstname !== undefined) form.append('firstname', updateData.firstname);
+  if (updateData.lastname !== undefined) form.append('lastname', updateData.lastname);
+  if (updateData.mobile !== undefined) form.append('mobile', updateData.mobile);
+  if (updateData.email !== undefined) form.append('email', updateData.email);
+
+  // Append actual image file buffer if provided
+  if (profilePicFile) {
+    form.append('profile_pic', profilePicFile.buffer, {
+      filename: profilePicFile.originalname,
+      contentType: profilePicFile.mimetype,
+    });
+  }
+
+  if (updateData.class !== undefined) form.append('class', updateData.class);
+  if (updateData.segment !== undefined) form.append('segment', updateData.segment);
+  if (updateData.address !== undefined) form.append('address', updateData.address);
+
+  // Identifying info for RUPPI
+  form.append('student_id', studentId);
+  form.append('deviceType', 'web');
+  form.append('device_type', 'web'); // Alias for older endpoints
+
+  let ruppiResponse: RuppiUpdateProfileResponse;
+  try {
+    console.log('[AuthService] RUPPI Update Profile → POST', ruppiConfig.updateProfileUrl, '| student_id:', studentId);
+
+    const { data } = await ruppiClient.post<RuppiUpdateProfileResponse>(
+      ruppiConfig.updateProfileUrl,
+      form,
+      {
+        headers: {
+          ...form.getHeaders(),
+          'Authorization': `Bearer ${ruppiToken}`,
+        },
+      }
+    );
+    ruppiResponse = data;
+    console.log('[AuthService] RUPPI Update Profile response:', JSON.stringify(ruppiResponse));
+  } catch (error: unknown) {
+    const axiosErr = error as { response?: { status: number; data?: { msg?: string } } };
+    if (axiosErr.response?.status === 401) {
+      // RUPPI session token has expired — save locally and return success so the
+      // user's profile still updates correctly until they log in again.
+      console.warn('[AuthService] RUPPI token expired — saving profile locally only for:', studentId);
+      await saveLocally();
+      return;
+    }
+    if (axiosErr.response) {
+      console.error('[AuthService] RUPPI Update Profile error:', axiosErr.response.status, JSON.stringify(axiosErr.response.data));
+      throw new AppError(axiosErr.response.data?.msg ?? 'Failed to update profile', 400);
+    }
+    // Network error — save locally rather than failing completely
+    console.error('[AuthService] RUPPI Update Profile network error — saving locally');
+    await saveLocally();
+    return;
+  }
+
+  if (!ruppiResponse.status) {
+    console.warn('[AuthService] RUPPI Update Profile rejected (status:false):', JSON.stringify(ruppiResponse));
+    // Data is already saved locally, so we consider this a success for the user.
+    return;
+  }
+
+  console.log('[AuthService] RUPPI Update Profile sync successful for:', studentId);
+}
+
+

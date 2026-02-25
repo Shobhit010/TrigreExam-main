@@ -11,6 +11,8 @@ import {
   resendCodeController,
   verifyStudentController,
   changePasswordController,
+  getProfileController,
+  updateProfileController,
 } from './auth.controller';
 import { requireAuth } from '../../middlewares/auth.middleware';
 
@@ -29,7 +31,7 @@ const loginRateLimiter = rateLimit({
 
 const generalRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 100, // Increased from 20 to 100 to allow frequent updates during development
   message: { success: false, message: 'Too many requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -131,5 +133,12 @@ const changePasswordValidation = [
   body('confirm_password').isString().notEmpty().withMessage('Confirm password is required'),
 ];
 router.post('/change-password', requireAuth, generalRateLimiter, changePasswordValidation, changePasswordController);
+
+// GET /api/auth/profile
+router.get('/profile', requireAuth, generalRateLimiter, getProfileController);
+
+// POST /api/auth/update-profile
+router.post('/update-profile', requireAuth, generalRateLimiter, upload.single('profile_pic'), updateProfileController);
+
 
 export default router;

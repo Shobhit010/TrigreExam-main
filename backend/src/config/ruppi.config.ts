@@ -10,6 +10,8 @@ export const ruppiConfig = {
   changePasswordUrl: `${env.ruppiBaseUrl}${env.ruppiChangePasswordPath}`,
   resendCodeUrl: `${env.ruppiBaseUrl}${env.ruppiAuthResendCodePath}`,
   verifyStudentUrl: `${env.ruppiBaseUrl}${env.ruppiAuthVerifyStudentPath}`,
+  getProfileUrl: `${env.ruppiBaseUrl}${env.ruppiGetProfilePath}`,
+  updateProfileUrl: `${env.ruppiBaseUrl}${env.ruppiUpdateProfilePath}`,
   bearerToken: env.ruppiBearerToken,
   deviceType: 'web' as const,
   timeoutMs: 10000,

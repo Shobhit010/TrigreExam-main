@@ -9,6 +9,7 @@ interface AuthContextType {
     loading: boolean;
     login: (email: string, password: string) => Promise<void>;
     logout: () => void;
+    refreshProfile: () => Promise<void>;
     isAuthenticated: boolean;
 }
 
@@ -18,6 +19,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
 
+    const refreshProfile = async () => {
+        try {
+            const freshUser = await authService.getProfile();
+            setUser(freshUser);
+        } catch (error) {
+            console.error("Failed to refresh profile:", error);
+        }
+    };
+
     useEffect(() => {
         // Check for existing session on mount
         const initAuth = async () => {
@@ -25,6 +35,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const currentUser = authService.getCurrentUser();
                 if (currentUser) {
                     setUser(currentUser);
+                    // Proactively refresh profile on app load
+                    refreshProfile();
                 }
             } catch (error) {
                 console.error("Auth initialization failed:", error);
@@ -41,6 +53,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             const loggedInUser = await authService.login(email, password);
             setUser(loggedInUser);
+            // After successful login, attempt to fetch the fresh profile
+            // but don't let it block or fail the login if it errors out
+            refreshProfile().catch(err => console.error("Post-login refresh failed:", err));
         } catch (error) {
             throw error;
         } finally {
@@ -60,6 +75,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 loading,
                 login,
                 logout,
+                refreshProfile,
                 isAuthenticated: !!user,
             }}
         >

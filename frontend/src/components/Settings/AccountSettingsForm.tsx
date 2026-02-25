@@ -1,18 +1,107 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useAuth } from "../../context/AuthContext";
+import { authService } from "../../services/authService";
 
 const AccountSettingsForm: React.FC = () => {
-  const [profilePreview, setProfilePreview] = useState<string | null>(null);
+  const { user, refreshProfile } = useAuth();
+  const [profilePreview, setProfilePreview] = useState<string | null>(user?.profile_pic || null);
+
+  const [formData, setFormData] = useState({
+    firstName: user?.firstname || "",
+    lastName: user?.lastname || "",
+    mobile: user?.mobile || "",
+    address: user?.address || "",
+    class: user?.class || "",
+    segment: user?.segment || "",
+  });
+
+  const [profileFile, setProfileFile] = useState<File | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        firstName: user.firstname || "",
+        lastName: user.lastname || "",
+        mobile: user.mobile || "",
+        address: user.address || "",
+        class: user.class || "",
+        segment: user.segment || "",
+      });
+      setProfilePreview(user.profile_pic);
+    }
+  }, [user]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
+      if (file.size > 2 * 1024 * 1024) {
+        alert("Image must be smaller than 2MB.");
+        return;
+      }
+      setProfileFile(file);
       setProfilePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      // Use FormData when a profile picture is included so the backend (multer) can parse the file
+      const fd = new FormData();
+      fd.append("firstname", formData.firstName);
+      fd.append("lastname", formData.lastName);
+      fd.append("mobile", formData.mobile);
+      fd.append("class", formData.class);
+      fd.append("segment", formData.segment);
+      fd.append("address", formData.address);
+      if (user?.email) {
+        fd.append("email", user.email);
+      }
+      if (profileFile) {
+        fd.append("profile_pic", profileFile);
+      }
+      await authService.updateProfileFormData(fd);
+      await refreshProfile();
+      alert("Profile updated successfully!");
+    } catch (error: unknown) {
+      console.error("Update failed — full error:", error);
+      let msg = 'Unknown error';
+      const axiosErr = error as {
+        response?: { data?: { message?: string }; status?: number };
+        request?: unknown;
+        message?: string;
+        code?: string;
+      };
+      if (axiosErr.response?.data?.message) {
+        // Server responded with a structured error
+        msg = axiosErr.response.data.message;
+      } else if (axiosErr.response) {
+        // Server responded, but body has no message field
+        msg = `Server error (HTTP ${axiosErr.response.status})`;
+      } else if (axiosErr.request) {
+        // Request was made but no response received (network/CORS/timeout)
+        msg = axiosErr.code === 'ECONNABORTED'
+          ? 'Request timed out — please try again'
+          : 'Network error — please check your connection';
+      } else if (axiosErr.message) {
+        msg = axiosErr.message;
+      }
+      alert(`Failed to update profile: ${msg}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
     <>
-      <form>
+      <form onSubmit={handleSubmit}>
         <div className="mb-[24px]">
           <h5 className="!text-lg !mb-[4px]">Profile</h5>
           <p className="text-gray-500 dark:text-gray-400 text-sm">
@@ -27,8 +116,12 @@ const AccountSettingsForm: React.FC = () => {
             </label>
             <input
               type="text"
+              name="firstName"
+              value={formData.firstName}
+              onChange={handleInputChange}
               className="h-[42px] rounded-lg text-black dark:text-white border border-gray-200 dark:border-[#172036] bg-white dark:bg-[#0c1427] px-[16px] block w-full outline-0 transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 text-[14px]"
-              defaultValue="Default"
+              placeholder="First Name"
+              required
             />
           </div>
 
@@ -38,8 +131,12 @@ const AccountSettingsForm: React.FC = () => {
             </label>
             <input
               type="text"
+              name="lastName"
+              value={formData.lastName}
+              onChange={handleInputChange}
               className="h-[42px] rounded-lg text-black dark:text-white border border-gray-200 dark:border-[#172036] bg-white dark:bg-[#0c1427] px-[16px] block w-full outline-0 transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 text-[14px]"
-              defaultValue="Default"
+              placeholder="Last Name"
+              required
             />
           </div>
 
@@ -50,7 +147,7 @@ const AccountSettingsForm: React.FC = () => {
             <input
               type="text"
               className="h-[42px] rounded-lg text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-[#172036] bg-gray-50 dark:bg-[#0a0f1e] px-[16px] block w-full outline-0 transition-all cursor-not-allowed text-[14px]"
-              defaultValue="Institute Email"
+              value={user?.email || ""}
               readOnly
             />
           </div>
@@ -61,8 +158,12 @@ const AccountSettingsForm: React.FC = () => {
             </label>
             <input
               type="text"
+              name="mobile"
+              value={formData.mobile}
+              onChange={handleInputChange}
               className="h-[42px] rounded-lg text-black dark:text-white border border-gray-200 dark:border-[#172036] bg-white dark:bg-[#0c1427] px-[16px] block w-full outline-0 transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 text-[14px]"
-              defaultValue="7633849115"
+              placeholder="Mobile Number"
+              required
             />
           </div>
 
@@ -70,7 +171,12 @@ const AccountSettingsForm: React.FC = () => {
             <label className="mb-[8px] text-black dark:text-white font-semibold text-[13px] block">
               Class <span className="text-danger-500">*</span>
             </label>
-            <select className="h-[42px] rounded-lg border border-gray-200 dark:border-[#172036] bg-white dark:bg-[#0c1427] px-[14px] block w-full outline-0 cursor-pointer transition-all focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 text-black dark:text-white text-[14px]">
+            <select
+              name="class"
+              value={formData.class}
+              onChange={handleInputChange}
+              className="h-[42px] rounded-lg border border-gray-200 dark:border-[#172036] bg-white dark:bg-[#0c1427] px-[14px] block w-full outline-0 cursor-pointer transition-all focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 text-black dark:text-white text-[14px]"
+            >
               <option value="">Select Class</option>
               <option value="6">Class 6</option>
               <option value="7">Class 7</option>
@@ -86,7 +192,12 @@ const AccountSettingsForm: React.FC = () => {
             <label className="mb-[8px] text-black dark:text-white font-semibold text-[13px] block">
               Segment <span className="text-danger-500">*</span>
             </label>
-            <select className="h-[42px] rounded-lg border border-gray-200 dark:border-[#172036] bg-white dark:bg-[#0c1427] px-[14px] block w-full outline-0 cursor-pointer transition-all focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 text-black dark:text-white text-[14px]">
+            <select
+              name="segment"
+              value={formData.segment}
+              onChange={handleInputChange}
+              className="h-[42px] rounded-lg border border-gray-200 dark:border-[#172036] bg-white dark:bg-[#0c1427] px-[14px] block w-full outline-0 cursor-pointer transition-all focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 text-black dark:text-white text-[14px]"
+            >
               <option value="">Select Segment</option>
               <option value="science">Science</option>
               <option value="commerce">Commerce</option>
@@ -141,6 +252,9 @@ const AccountSettingsForm: React.FC = () => {
           </label>
           <input
             type="text"
+            name="address"
+            value={formData.address}
+            onChange={handleInputChange}
             className="h-[42px] rounded-lg text-black dark:text-white border border-gray-200 dark:border-[#172036] bg-white dark:bg-[#0c1427] px-[16px] block w-full outline-0 transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 text-[14px]"
             placeholder="Enter your address"
           />
@@ -148,11 +262,14 @@ const AccountSettingsForm: React.FC = () => {
 
         <div className="mt-[24px]">
           <button
-            type="button"
-            className="font-semibold inline-flex items-center gap-2 transition-all rounded-lg text-[14px] py-[10px] px-[28px] bg-primary-500 text-white hover:bg-primary-600 hover:shadow-lg hover:shadow-primary-500/25"
+            type="submit"
+            disabled={isSubmitting}
+            className={`font-semibold inline-flex items-center gap-2 transition-all rounded-lg text-[14px] py-[10px] px-[28px] ${isSubmitting ? "bg-gray-400 cursor-not-allowed" : "bg-primary-500 hover:bg-primary-600 hover:shadow-lg hover:shadow-primary-500/25"} text-white`}
           >
-            <i className="material-symbols-outlined text-[18px]">check</i>
-            Submit
+            <i className="material-symbols-outlined text-[18px]">
+              {isSubmitting ? "sync" : "check"}
+            </i>
+            {isSubmitting ? "Updating..." : "Save Changes"}
           </button>
         </div>
       </form>
