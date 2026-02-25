@@ -1,0 +1,336 @@
+frontend/
+├── .gitignore
+├── README.md
+├── FolderStructure.txt
+├── eslint.config.js
+├── index.html
+├── package.json
+├── package-lock.json
+├── tsconfig.app.json
+├── tsconfig.json
+├── tsconfig.node.json
+├── vite.config.ts
+│
+├── public/
+│   ├── vite.svg
+│   └── images/
+│       ├── 200.jpg
+│       ├── TrigreExamInvoice.pdf
+│       ├── admin.png
+│       ├── app.png
+│       ├── avatar-with-laptop.png
+│       ├── bank.png
+│       ├── bar-code.svg
+│       ├── binance-2.png
+│       ├── blue-man.jpg
+│       ├── cardano.png
+│       ├── cards-bg.jpg
+│       ├── cat.webp
+│       ├── chowmein.png
+│       ├── coming-soon.jpg
+│       ├── confirm-email.jpg
+│       ├── course-thumbnail.png
+│       ├── created.png
+│       ├── cut-circle.png
+│       ├── diagram.png
+│       ├── doctor.png
+│       ├── dogecoin.png
+│       ├── error.png
+│       ├── ethereum-2.png
+│       ├── favicon.ico
+│       ├── female-doctor.png
+│       ├── forgot-password.jpg
+│       ├── girl-with-dog.png
+│       ├── girl-with-smile.png
+│       ├── hospital.png
+│       ├── internal-error.png
+│       ├── line.png
+│       ├── litecoin.png
+│       ├── lock-screen.jpg
+│       ├── logo-big.svg
+│       ├── logo-icon.svg
+│       ├── logo.svg
+│       ├── logout.jpg
+│       ├── main-doctor.png
+│       ├── man-searching-house.png
+│       ├── man-with-tablet.png
+│       ├── marketing-tool.png
+│       ├── master-card.png
+│       ├── online-learning.gif
+│       ├── paper.png
+│       ├── paper2.png
+│       ├── patient.jpg
+│       ├── play.png
+│       ├── player.jpg
+│       ├── polkadot.png
+│       ├── portfolio-bg.jpg
+│       ├── profile-cover.jpg
+│       ├── profile.jpg
+│       ├── qr-code.svg
+│       ├── reset-password.jpg
+│       ├── shape.png
+│       ├── sign-in.jpg
+│       ├── sign-up.jpg
+│       ├── signature.svg
+│       ├── solana.png
+│       ├── sort.svg
+│       ├── sphere-bowl.png
+│       ├── spring-fat.png
+│       ├── ssc.png
+│       ├── star.png
+│       ├── starter.png
+│       ├── store.png
+│       ├── tether.png
+│       ├── trophy.gif
+│       ├── upsc.webp
+│       ├── users.png
+│       ├── vector-map.png
+│       ├── vector1.png
+│       ├── vector2.png
+│       ├── video.mp4
+│       ├── welcome.png
+│       ├── white-logo-big.svg
+│       ├── white-logo.svg
+│       ├── xrp.png
+│       ├── browsers/
+│       │   ├── google-chrome.svg
+│       │   ├── microsoft-edge.svg
+│       │   ├── mozilla-firefox.svg
+│       │   ├── opera-mini.svg
+│       │   ├── others.svg
+│       │   └── safari.svg
+│       ├── buildings/
+│       │   ├── building1.png
+│       │   ├── building2.png
+│       │   ├── building3.png
+│       │   └── building4.png
+│       ├── clients/
+│       │   ├── client1.jpg
+│       │   ├── client2.jpg
+│       │   ├── client3.jpg
+│       │   ├── client4.jpg
+│       │   ├── client5.jpg
+│       │   ├── client6.jpg
+│       │   ├── client7.jpg
+│       │   ├── client8.jpg
+│       │   ├── client9.jpg
+│       │   ├── client10.jpg
+│       │   ├── client11.jpg
+│       │   └── client12.jpg
+│       ├── flags/
+│       │   ├── australia.svg
+│       │   ├── brazil.svg
+│       │   ├── canada.svg
+│       │   ├── france.svg
+│       │   ├── germany.svg
+│       │   ├── portugal.svg
+│       │   ├── spain.svg
+│       │   ├── uk.svg
+│       │   └── usa.svg
+│       └── users/
+│           ├── user1.jpg  ... user80.jpg  (80 files)
+│
+└── src/
+    ├── index.css
+    ├── main.tsx
+    ├── vite-env.d.ts
+    │
+    ├── context/
+    │   └── AuthContext.tsx
+    │
+    ├── utils/
+    │   └── testStateManager.ts
+    │
+    ├── components/
+    │   ├── PrivateRoutes.tsx
+    │   │
+    │   ├── Authentication/
+    │   │   ├── ConfirmEmailContent.tsx
+    │   │   ├── DarkMode.tsx
+    │   │   ├── ForgotPasswordForm.tsx
+    │   │   ├── LockScreenContent.tsx
+    │   │   ├── LogoutContent.tsx
+    │   │   ├── ResetPasswordForm.tsx
+    │   │   ├── SignInForm.tsx
+    │   │   └── SignUpForm.tsx
+    │   │
+    │   ├── Dashboard/
+    │   │   └── LMS/
+    │   │       ├── Announcements.tsx
+    │   │       ├── Courses.tsx
+    │   │       ├── PerformanceStats.tsx
+    │   │       ├── QuickAccess.tsx
+    │   │       ├── StatsCard.tsx
+    │   │       └── Welcome.tsx
+    │   │
+    │   ├── Layout/
+    │   │   ├── Footer.tsx
+    │   │   ├── Layout.tsx
+    │   │   ├── Header/
+    │   │   │   ├── AppsMenu.tsx
+    │   │   │   ├── DarkMode.tsx
+    │   │   │   ├── Fullscreen.tsx
+    │   │   │   ├── Notifications.tsx
+    │   │   │   ├── ProfileMenu.tsx
+    │   │   │   └── index.tsx
+    │   │   └── SidebarMenu/
+    │   │       └── index.tsx
+    │   │
+    │   ├── LMS/
+    │   │   ├── InstructorsTable.tsx
+    │   │   ├── CourseDetailsContent/
+    │   │   │   ├── CourseInstructor.tsx
+    │   │   │   ├── EnrolledStudents.tsx
+    │   │   │   ├── ManageReviews.tsx
+    │   │   │   ├── OverallReviews.tsx
+    │   │   │   └── index.tsx
+    │   │   ├── CoursesList/
+    │   │   │   └── CoursesListTable.tsx
+    │   │   ├── CreateCourseForm/
+    │   │   │   └── index.tsx
+    │   │   ├── EditCourseForm/
+    │   │   │   └── index.tsx
+    │   │   └── LessonPreviewContent/
+    │   │       └── index.tsx
+    │   │
+    │   ├── Settings/
+    │   │   ├── AccountSettingsForm.tsx
+    │   │   ├── ChangePasswordForm.tsx
+    │   │   ├── ConnectionsContent.tsx
+    │   │   ├── Nav.tsx
+    │   │   ├── PrivacyPolicyContent.tsx
+    │   │   └── TermsConditionsContent.tsx
+    │   │
+    │   └── UIElements/
+    │       ├── Accordion/
+    │       │   └── AccordionContent.tsx
+    │       ├── Alerts/
+    │       │   ├── AlertsWithIcon.tsx
+    │       │   ├── BGColorAlerts.tsx
+    │       │   ├── BGColorAlertsWithIcon.tsx
+    │       │   ├── BasicAlerts.tsx
+    │       │   ├── DismissingAlerts.tsx
+    │       │   └── OutlineAlerts.tsx
+    │       ├── Avatars/
+    │       │   ├── AvatarSizeRoundedCircle.tsx
+    │       │   ├── AvatarSizeSquareCircle.tsx
+    │       │   ├── ImageSizeRoundedCircle.tsx
+    │       │   └── ImageSizeSquareCircle.tsx
+    │       ├── Badges/
+    │       │   ├── Headings.tsx
+    │       │   └── PillBadges.tsx
+    │       ├── Breadcrumb/
+    │       │   └── BreadcrumbContent.tsx
+    │       ├── Buttons/
+    │       │   ├── BasicButtons.tsx
+    │       │   ├── BlockButtons.tsx
+    │       │   ├── OutlineButtons.tsx
+    │       │   └── ToggleButtons/
+    │       │       ├── BasicToggle.tsx
+    │       │       ├── CheckedState.tsx
+    │       │       ├── ColorsToggle.tsx
+    │       │       ├── DisabledState.tsx
+    │       │       ├── OnOffButton.tsx
+    │       │       └── index.tsx
+    │       ├── Dropdowns/
+    │       │   ├── DropdownStyle1.tsx
+    │       │   ├── DropdownStyle2.tsx
+    │       │   ├── DropdownStyle3.tsx
+    │       │   └── DropdownStyle4.tsx
+    │       ├── Modal/
+    │       │   └── LiveDemo.tsx
+    │       ├── Pagination/
+    │       │   ├── PaginationStyle1.tsx
+    │       │   └── PaginationStyle2.tsx
+    │       ├── Progress/
+    │       │   ├── Labels.tsx
+    │       │   └── Overview.tsx
+    │       ├── Spinner/
+    │       │   ├── AlignmentSpinner.tsx
+    │       │   ├── ButtonsSpinner.tsx
+    │       │   ├── ColorSpinner.tsx
+    │       │   ├── DefaultSpinner.tsx
+    │       │   ├── ProgressSpinner.tsx
+    │       │   ├── SizeSpinner.tsx
+    │       │   └── SpinnerWithCard.tsx
+    │       ├── Tabs/
+    │       │   ├── BasicTabs.tsx
+    │       │   └── IconTabs.tsx
+    │       ├── Tooltips/
+    │       │   ├── BottomTooltip.tsx
+    │       │   └── DefaultTooltip.tsx
+    │       └── Videos/
+    │           ├── VimeoRatio.tsx
+    │           ├── VimeoRatio21x9.tsx
+    │           ├── YouTubeRatio.tsx
+    │           └── YouTubeRatio21x9.tsx
+    │
+    └── pages/
+        ├── BlankPage.tsx
+        ├── Help.tsx
+        ├── Invoice.tsx
+        ├── NotFound.tsx
+        │
+        ├── authentication/
+        │   ├── ConfirmEmail.tsx
+        │   ├── ForgotPassword.tsx
+        │   ├── LockScreen.tsx
+        │   ├── Logout.tsx
+        │   ├── ResetPassword.tsx
+        │   ├── SignIn.tsx
+        │   └── SignUp.tsx
+        │
+        ├── dashboard/
+        │   ├── Announcements.tsx
+        │   ├── Lms.tsx
+        │   ├── MyCourses.tsx
+        │   ├── MyPurchases.tsx
+        │   ├── MyResults.tsx
+        │   └── TestReport.tsx
+        │
+        ├── lms/
+        │   ├── CourseDetails.tsx
+        │   ├── CoursesList.tsx
+        │   ├── CreateCourse.tsx
+        │   ├── EditCourse.tsx
+        │   ├── Instructors.tsx
+        │   ├── LessonPreview.tsx
+        │   ├── LiveTestPage.tsx
+        │   ├── TestCourseDetails.tsx
+        │   ├── TestInstructionsPage.tsx
+        │   ├── TestResultPage.tsx
+        │   └── VideoCoursePlayer.tsx
+        │
+        ├── profile/
+        │   ├── ProfileProjects.tsx
+        │   ├── ProfileTeams.tsx
+        │   └── UserProfile.tsx
+        │
+        ├── settings/
+        │   ├── AccountSettings.tsx
+        │   ├── ChangePassword.tsx
+        │   ├── Connections.tsx
+        │   ├── PrivacyPolicy.tsx
+        │   └── TermsConditions.tsx
+        │
+        └── ui-elements/
+            ├── Accordion.tsx
+            ├── Alerts.tsx
+            ├── Avatars.tsx
+            ├── Badges.tsx
+            ├── Breadcrumb.tsx
+            ├── Buttons.tsx
+            ├── Dropdowns.tsx
+            ├── Images.tsx
+            ├── Modal.tsx
+            ├── Pagination.tsx
+            ├── Progress.tsx
+            ├── Spinner.tsx
+            ├── Tabs.tsx
+            ├── Tooltips.tsx
+            ├── Typography.tsx
+            └── Videos.tsx
+
+─────────────────────────────────────────────────
+Total Source Files: ~220+ (excluding node_modules, .git, .next, dist)
+─────────────────────────────────────────────────
