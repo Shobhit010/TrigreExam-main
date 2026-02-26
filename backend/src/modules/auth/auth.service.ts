@@ -71,6 +71,9 @@ interface RuppiLoginResponse {
 }
 
 // ---- JWT payload stored in the backend's token -------------------------
+// NOTE: profile_pic is intentionally excluded — Base64 images can be hundreds
+// of KB and would inflate the Authorization header past Node's 8 KB limit (HTTP 431).
+// Profile data including profile_pic is fetched fresh from MongoDB on /api/auth/profile.
 export interface JwtPayload {
   sub: string;
   student_id: string;
@@ -78,7 +81,6 @@ export interface JwtPayload {
   firstname: string;
   lastname: string;
   mobile: string;
-  profile_pic: string | null;
   class?: string;
   segment?: string;
   address?: string;
@@ -206,6 +208,7 @@ export async function loginWithRuppi(
   ) as IUser;
 
   // Step 5: Issue backend's own JWT — payload contains NO sensitive RUPPI data
+  // profile_pic is excluded to keep the token small (Base64 images cause HTTP 431).
   const jwtPayload: JwtPayload = {
     sub: (user._id as mongoose.Types.ObjectId).toString(),
     student_id: user.student_id,
@@ -213,7 +216,6 @@ export async function loginWithRuppi(
     firstname: user.firstname,
     lastname: user.lastname,
     mobile: user.mobile,
-    profile_pic: user.profile_pic,
     class: user.class,
     segment: user.segment,
     address: user.address,
