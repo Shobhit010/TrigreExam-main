@@ -11,6 +11,7 @@ export interface IUser extends Document {
   segment?: string;
   address?: string;
   ruppi_token_encrypted: string;
+  password?: string;
   last_login: Date;
   created_at: Date;
   updated_at: Date;
@@ -69,6 +70,10 @@ const userSchema = new mongoose.Schema<IUser>(
       required: true,
       select: false,
     },
+    password: {
+      type: String,
+      select: false,
+    },
     last_login: {
       type: Date,
       default: Date.now,
@@ -85,6 +90,7 @@ userSchema.methods['toJSON'] = function () {
   type SafeUser = Omit<IUser, 'ruppi_token_encrypted'> & { ruppi_token_encrypted?: string };
   const obj = this.toObject() as SafeUser;
   delete obj.ruppi_token_encrypted;
+  delete obj.password;
   return obj;
 };
 

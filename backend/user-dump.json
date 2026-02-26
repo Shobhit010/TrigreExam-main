@@ -1,0 +1,21 @@
+[
+  {
+    "_id": "699ead6a9b676d2b8f70c07c",
+    "student_id": "699eacdd47f1b563bb5a78ed",
+    "firstname": "TestUser",
+    "mobile": "6205028132"
+  },
+  {
+    "_id": "699eef569b676d2b8f714246",
+    "student_id": "699eef0747f1b563bb5a78fa",
+    "firstname": "RSN",
+    "mobile": "6205028132"
+  },
+  {
+    "_id": "69a0304f9b676d2b8f72041f",
+    "student_id": "69a03019345fe250e5293cfc",
+    "firstname": "Raushan kr",
+    "mobile": "6205028132",
+    "password": "8bb0cf6eb9b17d0f7d22b456f121257dc1254e1f01665370476383ea776df414"
+  }
+]
