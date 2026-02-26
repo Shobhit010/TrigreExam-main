@@ -36,9 +36,9 @@ export function createApp(): Application {
     })
   );
 
-  // Body parsing with size limit to prevent payload attacks
-  app.use(express.json({ limit: '10kb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+  // Body parsing with size limit to support profile pictures and large datasets
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   // HTTP request logging
   if (env.nodeEnv !== 'test') {
@@ -46,7 +46,7 @@ export function createApp(): Application {
   }
 
   // Health check — no auth required
-  app.get('/health', (_req, res) => {
+  app.get('/', (_req, res) => {
     res.status(200).json({
       success: true,
       message: 'TrigreExam backend is running',

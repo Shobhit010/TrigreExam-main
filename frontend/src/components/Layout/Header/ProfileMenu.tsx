@@ -5,10 +5,14 @@ import { useAuth } from "../../../context/AuthContext";
 
 const ProfileMenu: React.FC = () => {
   const { pathname } = useLocation();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
 
   const [active, setActive] = useState<boolean>(false);
   const dropdownRef = useRef<HTMLDivElement>(null); // Ref for the dropdown container
+
+  const firstName = user?.name?.split(" ")[0] || "Guest";
+  const fullName = user?.name || "Guest User";
+  const profilePic = user?.profile_pic || "/images/admin.png";
 
   const handleDropdownToggle = () => {
     setActive((prevState) => !prevState);
@@ -46,14 +50,14 @@ const ProfileMenu: React.FC = () => {
           }`}
       >
         <img
-          src="/images/admin.png"
+          src={profilePic}
           className="w-[35px] h-[35px] md:w-[42px] md:h-[42px] rounded-full ltr:md:mr-[2px] ltr:lg:mr-[8px] rtl:md:ml-[2px] rtl:lg:ml-[8px] border-[2px] border-primary-200 inline-block"
           alt="admin-image"
           width={35}
           height={35}
         />
         <span className="block font-semibold text-[0px] lg:text-base">
-          Olivia
+          {firstName}
         </span>
         <i className="ri-arrow-down-s-line text-[15px] absolute ltr:-right-[3px] rtl:-left-[3px] top-1/2 -translate-y-1/2 mt-px"></i>
       </button>
@@ -62,7 +66,7 @@ const ProfileMenu: React.FC = () => {
         <div className="profile-menu-dropdown bg-white dark:bg-[#0c1427] transition-all shadow-3xl dark:shadow-none py-[22px] absolute mt-[13px] md:mt-[14px] w-[195px] z-[1] top-full ltr:right-0 rtl:left-0 rounded-md">
           <div className="flex items-center border-b border-gray-100 dark:border-[#172036] pb-[12px] mx-[20px] mb-[10px]">
             <img
-              src="/images/admin.png"
+              src={profilePic}
               className="rounded-full w-[31px] h-[31px] ltr:mr-[9px] rtl:ml-[9px] border-2 border-primary-200 inline-block"
               alt="admin-image"
               width={31}
@@ -70,9 +74,9 @@ const ProfileMenu: React.FC = () => {
             />
             <div>
               <span className="block text-black dark:text-white font-medium">
-                Olivia John
+                {fullName}
               </span>
-              <span className="block text-xs">Marketing Manager</span>
+              <span className="block text-xs">Student ID: {user?.student_id || 'N/A'}</span>
             </div>
           </div>
 
