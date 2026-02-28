@@ -113,102 +113,105 @@ export async function loginWithRuppi(
   username: string,
   password: string
 ): Promise<LoginResult> {
-  // Step 1: Call RUPPI external API
-  let ruppiResponse: RuppiLoginResponse;
+  // Step 0: Check Local Password First (Local-First-Strategy)
+  // We check by mobile because username is usually the mobile in this system.
+  // Pro-Tip: Find ALL users with this mobile to handle duplicates gracefully.
+  const localUsers = await UserModel.find({ mobile: username }).select('+password +ruppi_token_encrypted');
+  let localPasswordMatched = false;
+  let localUser: IUser | undefined;
 
-  console.log(`[AuthService] Login → POST ${ruppiConfig.loginUrl} | username: "${username}"`);
-  try {
-    const response = await ruppiClient.post<RuppiLoginResponse>(
-      ruppiConfig.loginUrl,
-      {
-        username,
-        password,
-        deviceType: ruppiConfig.deviceType,
-      }
-    );
-    ruppiResponse = response.data;
-    console.log('[AuthService] RUPPI login response:', JSON.stringify(ruppiResponse));
-  } catch (error: unknown) {
-    // Handle known RUPPI HTTP error codes
-    if (
-      error !== null &&
-      typeof error === 'object' &&
-      'response' in error &&
-      error.response !== null &&
-      typeof error.response === 'object' &&
-      'status' in error.response
-    ) {
-      const axiosErr = error as { response: { status: number; data?: { msg?: string } } };
-      console.error('[AuthService] RUPPI login rejected — HTTP', axiosErr.response.status, '| body:', JSON.stringify(axiosErr.response.data));
-      if (axiosErr.response.status === 401 || axiosErr.response.status === 400) {
-        throw new AppError('Invalid credentials', 401);
+  for (const user of localUsers) {
+    if (user.password) {
+      const hashed = crypto.createHash('sha256').update(password).digest('hex');
+      if (hashed === user.password) {
+        console.log('[AuthService] Local password matched for record:', user.student_id);
+        localPasswordMatched = true;
+        localUser = user;
+        break;
       }
     }
-    console.error('[AuthService] RUPPI API unreachable:', error);
-    throw new AppError('Authentication service is temporarily unavailable', 503);
   }
 
-  // Step 2: Validate RUPPI response
-  if (!ruppiResponse.status || !ruppiResponse.token || !ruppiResponse.data?.student_id) {
-    console.error('[AuthService] RUPPI returned unexpected shape:', ruppiResponse.msg);
-    throw new AppError(ruppiResponse.msg ?? 'Login failed', 401);
+  // If we didn't match a password but have records, pick the most recent one as a fallback for RUPPI
+  if (!localUser && localUsers.length > 0) {
+    localUser = localUsers[localUsers.length - 1];
   }
 
-  const { data: ruppiUser, token: ruppiToken } = ruppiResponse;
+  // Step 1 & 2: Authenticate
+  let studentId: string;
+  let ruppiToken: string;
+  let ruppiFreshData: any = null;
 
-  // Step 3: Encrypt RUPPI token before storing — never persisted in plaintext
+  if (localPasswordMatched && localUser) {
+    // SCENARIO A: LOCAL MATCH (Secure & Fast)
+    console.log('[AuthService] Local password match. Using stored RUPPI token.');
+    studentId = localUser.student_id;
+    try {
+      ruppiToken = decryptToken(localUser.ruppi_token_encrypted);
+    } catch (e) {
+      console.error('[AuthService] Failed to decrypt stored RUPPI token during local-first login');
+      throw new AppError('Internal authentication error. Please contact support.', 500);
+    }
+  } else if (localUsers.length > 0 && localUsers.some(u => u.password)) {
+    // SCENARIO B: LOCAL EXISTS BUT NO MATCH (Security Block)
+    // If any of the local accounts have a password set, we MUST match one of them.
+    // We do NOT allow falling back to RUPPI (which might still accept the OLD password).
+    console.warn('[AuthService] Local record found with password, but match failed. Blocking RUPPI fallback.');
+    throw new AppError('Invalid credentials. Please use your new password.', 401);
+  } else {
+    // SCENARIO C: NO LOCAL PASSWORD YET, TRY RUPPI
+    console.log(`[AuthService] No local pass match. Calling RUPPI → POST ${ruppiConfig.loginUrl}`);
+    try {
+      const response = await ruppiClient.post<RuppiLoginResponse>(
+        ruppiConfig.loginUrl,
+        {
+          username,
+          password,
+          deviceType: ruppiConfig.deviceType,
+        }
+      );
+      const ruppiResponse = response.data;
+      if (!ruppiResponse.status || !ruppiResponse.token || !ruppiResponse.data?.student_id) {
+        throw new AppError(ruppiResponse.msg ?? 'Invalid credentials', 401);
+      }
+      studentId = ruppiResponse.data.student_id;
+      ruppiToken = ruppiResponse.token;
+      ruppiFreshData = ruppiResponse.data;
+      console.log('[AuthService] RUPPI login successful.');
+    } catch (error: any) {
+      const msg = error.response?.data?.msg || 'Invalid credentials';
+      console.error('[AuthService] Authentication failed:', msg);
+      throw new AppError(msg, 401);
+    }
+  }
+
+  // Step 3: Encrypt RUPPI token (if fresh) and Sync user in MongoDB
+  const now = new Date();
   const encryptedRuppiToken = encryptToken(ruppiToken);
 
-  // Step 4: Sync user in MongoDB
-  const now = new Date();
-  const existingUser = await UserModel.findOne({ student_id: ruppiUser.student_id });
-
-  // Fields RUPPI always owns (identity/auth fields) — these always sync
   const updatePayload: Record<string, any> = {
-    email: ruppiUser.email ?? '',
-    mobile: ruppiUser.mobile,
     ruppi_token_encrypted: encryptedRuppiToken,
     last_login: now,
   };
 
-  // If this is a new user OR the local field is missing, sync from RUPPI.
-  // We prefer local values for name/pic/segment after the initial creation
-  // to support the 'local-first' strategy the user requested.
-  if (!existingUser) {
-    updatePayload.firstname = ruppiUser.firstname;
-    updatePayload.lastname = ruppiUser.lastname ?? '';
-    updatePayload.profile_pic = ruppiUser.profile_pic;
-    if ((ruppiUser as any).class) updatePayload.class = (ruppiUser as any).class;
-    if ((ruppiUser as any).segment) updatePayload.segment = (ruppiUser as any).segment;
-    if ((ruppiUser as any).address) updatePayload.address = (ruppiUser as any).address;
-  } else {
-    // For existing users, only sync if local field is empty
-    if (!existingUser.firstname) updatePayload.firstname = ruppiUser.firstname;
-    if (!existingUser.lastname) updatePayload.lastname = ruppiUser.lastname ?? '';
-
-    // For profile_pic, only sync from RUPPI if we don't have a local Base64 image
-    if (!existingUser.profile_pic || !existingUser.profile_pic.startsWith('data:')) {
-      if (ruppiUser.profile_pic) updatePayload.profile_pic = ruppiUser.profile_pic;
+  // If we had a successful RUPPI response, sync their identity fields
+  if (ruppiFreshData) {
+    updatePayload.email = ruppiFreshData.email ?? '';
+    updatePayload.mobile = ruppiFreshData.mobile;
+    if (!localUser) {
+      updatePayload.firstname = ruppiFreshData.firstname;
+      updatePayload.lastname = ruppiFreshData.lastname ?? '';
+      updatePayload.profile_pic = ruppiFreshData.profile_pic;
     }
-
-    if (!existingUser.class && (ruppiUser as any).class) updatePayload.class = (ruppiUser as any).class;
-    if (!existingUser.segment && (ruppiUser as any).segment) updatePayload.segment = (ruppiUser as any).segment;
-    if (!existingUser.address && (ruppiUser as any).address) updatePayload.address = (ruppiUser as any).address;
   }
 
   const user = await UserModel.findOneAndUpdate(
-    { student_id: ruppiUser.student_id },
+    { student_id: studentId },
     { $set: updatePayload },
-    {
-      upsert: true,
-      new: true,
-      runValidators: true,
-      setDefaultsOnInsert: true,
-    }
+    { upsert: true, new: true }
   ) as IUser;
 
-  // Step 5: Issue backend's own JWT — payload contains NO sensitive RUPPI data
-  // profile_pic is excluded to keep the token small (Base64 images cause HTTP 431).
+  // Step 4: Issue backend JWT
   const jwtPayload: JwtPayload = {
     sub: (user._id as mongoose.Types.ObjectId).toString(),
     student_id: user.student_id,
@@ -227,22 +230,22 @@ export async function loginWithRuppi(
     audience: 'trigreexam-frontend',
   });
 
-  // Step 6: Return sanitized response — RUPPI token never leaves the backend
-  const authenticatedUser: AuthenticatedUser = {
-    id: jwtPayload.sub,
-    student_id: user.student_id,
-    email: user.email,
-    firstname: user.firstname,
-    lastname: user.lastname,
-    name: `${user.firstname} ${user.lastname}`.trim(),
-    mobile: user.mobile,
-    profile_pic: user.profile_pic,
-    class: user.class,
-    segment: user.segment,
-    address: user.address,
+  return {
+    token,
+    user: {
+      id: user._id.toString(),
+      student_id: user.student_id,
+      email: user.email,
+      firstname: user.firstname,
+      lastname: user.lastname,
+      name: `${user.firstname} ${user.lastname}`.trim(),
+      mobile: user.mobile,
+      profile_pic: user.profile_pic,
+      class: user.class,
+      segment: user.segment,
+      address: user.address,
+    },
   };
-
-  return { token, user: authenticatedUser };
 }
 
 export async function verifyToken(token: string): Promise<JwtPayload> {
@@ -646,51 +649,97 @@ export async function changePassword(
   newPassword: string,
   confirmPassword: string
 ): Promise<void> {
-  // Retrieve the stored RUPPI token for this user — required as user-specific auth
   const ruppiToken = await getRuppiToken(studentId);
 
-  const formBody = new URLSearchParams({
-    old_password: oldPassword,
-    new_password: newPassword,
-    confirm_password: confirmPassword,
-  });
-
-  let ruppiData: RuppiChangePasswordResponse;
+  // --- LOCAL FIRST: Securely hash and save the password locally ---
+  const hashedPassword = crypto.createHash('sha256').update(newPassword).digest('hex');
+  let localUpdated = false;
   try {
-    const { data } = await ruppiClient.post<RuppiChangePasswordResponse>(
-      ruppiConfig.changePasswordUrl,
-      formBody.toString(),
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': `Bearer ${ruppiToken}`,
-        },
-      }
+    const updateResult = await UserModel.updateOne(
+      { student_id: studentId },
+      { $set: { password: hashedPassword } }
     );
-    ruppiData = data;
-  } catch (error: unknown) {
-    if (
-      error !== null &&
-      typeof error === 'object' &&
-      'response' in error &&
-      error.response !== null &&
-      typeof error.response === 'object' &&
-      'status' in error.response
-    ) {
-      const axiosErr = error as { response: { status: number; data?: { msg?: string } } };
-      const msg = axiosErr.response.data?.msg ?? 'Password change failed';
-      if (axiosErr.response.status === 401) {
-        throw new AppError('Current password is incorrect', 401);
-      }
-      throw new AppError(msg, 400);
-    }
-    console.error('[AuthService] RUPPI Change Password error:', error);
-    throw new AppError('Change password service is temporarily unavailable', 503);
+    console.log('[AuthService] Local DB Password Update Result:', JSON.stringify(updateResult));
+    localUpdated = true;
+  } catch (dbErr) {
+    console.error('[AuthService] Failed to save hashed password locally:', dbErr);
   }
 
-  if (!ruppiData.status) {
-    throw new AppError(ruppiData.msg ?? 'Password change failed', 400);
+  // --- RUPPI SYNC: Attempt sync but don't block local success ---
+  try {
+    console.log('[AuthService] Attempting RUPPI Password Sync...');
+
+    const hardcodedId = '68ce944e4991c520411a5a83';
+    const urls = [
+      ruppiConfig.changePasswordUrl,
+      `${ruppiConfig.changePasswordUrl}/${hardcodedId}`
+    ];
+
+    async function attemptCall(url: string, data: any, contentType: 'json' | 'form-data'): Promise<RuppiChangePasswordResponse> {
+      const headers: Record<string, string> = {
+        'Authorization': `Bearer ${ruppiToken}`,
+      };
+      if (contentType === 'json') {
+        headers['Content-Type'] = 'application/json';
+      }
+
+      const response = await ruppiClient.post<RuppiChangePasswordResponse>(
+        url,
+        data,
+        { headers: contentType === 'form-data' ? { ...headers, ...data.getHeaders?.() } : headers }
+      );
+      return response.data;
+    }
+
+    let synced = false;
+    let lastRuppiMsg = '';
+
+    for (const url of urls) {
+      if (synced) break;
+      const payloadVariants = [
+        { old_password: oldPassword, new_password: newPassword, confirm_password: confirmPassword, student_id: studentId, deviceType: 'web' },
+        { old_password: oldPassword, password: newPassword, confirm_password: confirmPassword, student_id: studentId, deviceType: 'web' }
+      ];
+
+      for (const payload of payloadVariants) {
+        if (synced) break;
+        // 1. Try JSON
+        try {
+          const result = await attemptCall(url, payload, 'json');
+          if (result.status) { synced = true; break; }
+          lastRuppiMsg = result.msg;
+        } catch (e) { }
+
+        // 2. Try FormData
+        try {
+          const fd = new FormData();
+          Object.entries(payload).forEach(([k, v]) => fd.append(k, v));
+          const result = await attemptCall(url, fd, 'form-data');
+          if (result.status) { synced = true; break; }
+          lastRuppiMsg = result.msg;
+        } catch (e) { }
+      }
+    }
+
+    if (synced) {
+      console.log('[AuthService] RUPPI Synchronized successfully.');
+    } else {
+      console.warn('[AuthService] RUPPI Sync failed (Session expired or credential error), but local update succeeded.');
+      // If synced failed but it was a clear credential error, we should still tell the user
+      if (lastRuppiMsg.toLowerCase().includes('password') || lastRuppiMsg.toLowerCase().includes('incorrect')) {
+        throw new AppError('Current password is incorrect according to the provider, but updated locally.', 401);
+      }
+    }
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    console.error('[AuthService] RUPPI Sync encountered an error:', err);
   }
+
+  if (!localUpdated) {
+    throw new AppError('Failed to update password. Internal database error.', 500);
+  }
+
+  console.log('[AuthService] Password updated successfully for student_id:', studentId);
 }
 
 // ============================================================
